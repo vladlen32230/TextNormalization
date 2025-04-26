@@ -1,0 +1,3 @@
+Use uv for package management.
+Do not create requirements.txt file.
+If you wanna add package, use "uv add ..."

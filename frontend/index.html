@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Инструмент нормализации текста</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background-color: #f1f1f1;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 0 5px 5px 5px;
+            overflow-x: auto;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            table-layout: fixed;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button.delete {
+            background-color: #f44336;
+        }
+        button.delete:hover {
+            background-color: #d32f2f;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0 15px 0;
+            display: inline-block;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .file-input {
+            margin-bottom: 20px;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            white-space: pre-wrap;
+        }
+        .loading {
+            display: none;
+            margin-left: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        .loading::after {
+            content: "...";
+            animation: dots 1.5s steps(3, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: "."; }
+            40%, 60% { content: ".."; }
+            80%, 100% { content: "..."; }
+        }
+        /* Column widths for the examples table */
+        #examples-table th:nth-child(1), #examples-table td:nth-child(1) { /* ID column */
+            width: 5%;
+        }
+        #examples-table th:nth-child(2), #examples-table td:nth-child(2) { /* Type column */
+            width: 15%;
+        }
+        #examples-table th:nth-child(3), #examples-table td:nth-child(3) { /* Unnormalized Text */
+            width: 25%;
+        }
+        #examples-table th:nth-child(4), #examples-table td:nth-child(4) { /* Normalized JSON */
+            width: 40%;
+        }
+        #examples-table th:nth-child(5), #examples-table td:nth-child(5) { /* Actions */
+            width: 15%;
+        }
+        
+        /* Column widths for the schemas table */
+        #schemas-table th:nth-child(1), #schemas-table td:nth-child(1) { /* ID column */
+            width: 5%;
+        }
+        #schemas-table th:nth-child(2), #schemas-table td:nth-child(2) { /* Type column */
+            width: 20%;
+        }
+        #schemas-table th:nth-child(3), #schemas-table td:nth-child(3) { /* Attributes */
+            width: 55%;
+        }
+        #schemas-table th:nth-child(4), #schemas-table td:nth-child(4) { /* Actions */
+            width: 20%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Инструмент нормализации текста</h1>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="processing">Обработка</div>
+            <div class="tab" data-tab="examples">Примеры</div>
+            <div class="tab" data-tab="schemas">Схемы</div>
+        </div>
+        
+        <!-- Processing Tab -->
+        <div id="processing" class="tab-content active">
+            <h2>Нормализация текста</h2>
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="text-to-normalize">Введите текст для нормализации:</label>
+                    <textarea id="text-to-normalize" rows="5" placeholder="Введите текст здесь..."></textarea>
+                </div>
+                <button id="normalize-text-btn">Нормализовать текст</button>
+                <span id="normalize-loading" class="loading">Обработка</span>
+                <div id="normalization-result" class="results" style="display: none;"></div>
+            </div>
+            
+            <h2>Пакетная обработка</h2>
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="xlsx-file">Загрузите XLSX файл для пакетной нормализации:</label>
+                    <input type="file" id="xlsx-file" class="file-input" accept=".xlsx">
+                </div>
+                <button id="process-xlsx-btn">Обработать XLSX</button>
+                <span id="process-xlsx-loading" class="loading">Обработка</span>
+            </div>
+        </div>
+        
+        <!-- Examples Tab -->
+        <div id="examples" class="tab-content">
+            <h2>Примеры</h2>
+            <button id="refresh-examples-btn">Обновить</button>
+            <button id="add-example-btn">Добавить новый пример</button>
+            <button id="upload-examples-xlsx-btn">Загрузить из XLSX</button>
+            <input type="file" id="examples-xlsx-file" style="display: none;" accept=".xlsx">
+            
+            <div id="example-form" style="display: none;">
+                <h3 id="example-form-title">Добавить новый пример</h3>
+                <div class="form-container">
+                    <div class="form-group">
+                        <label for="example-type">Тип:</label>
+                        <input type="text" id="example-type" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="example-unnormalized">Ненормализованный текст:</label>
+                        <textarea id="example-unnormalized" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="example-normalized">Нормализованный JSON (пары ключ-значение):</label>
+                        <textarea id="example-normalized" rows="5" required placeholder='{"ключ1": "значение1", "ключ2": "значение2"}'></textarea>
+                    </div>
+                    <input type="hidden" id="example-id">
+                    <button id="save-example-btn">Сохранить</button>
+                    <button id="cancel-example-btn">Отмена</button>
+                </div>
+            </div>
+            
+            <table id="examples-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Тип</th>
+                        <th>Ненормализованный текст</th>
+                        <th>Нормализованный JSON</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="examples-tbody"></tbody>
+            </table>
+        </div>
+        
+        <!-- Schemas Tab -->
+        <div id="schemas" class="tab-content">
+            <h2>Схемы</h2>
+            <button id="refresh-schemas-btn">Обновить</button>
+            <button id="add-schema-btn">Добавить новую схему</button>
+            <button id="upload-schemas-xlsx-btn">Загрузить из XLSX</button>
+            <input type="file" id="schemas-xlsx-file" style="display: none;" accept=".xlsx">
+            
+            <div id="schema-form" style="display: none;">
+                <h3 id="schema-form-title">Добавить новую схему</h3>
+                <div class="form-container">
+                    <div class="form-group">
+                        <label for="schema-type">Тип:</label>
+                        <input type="text" id="schema-type" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="schema-attributes">Атрибуты (через запятую):</label>
+                        <textarea id="schema-attributes" rows="5" required placeholder="атрибут1, атрибут2, атрибут3"></textarea>
+                    </div>
+                    <input type="hidden" id="schema-id">
+                    <button id="save-schema-btn">Сохранить</button>
+                    <button id="cancel-schema-btn">Отмена</button>
+                </div>
+            </div>
+            
+            <table id="schemas-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Тип</th>
+                        <th>Атрибуты</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="schemas-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const tabId = this.getAttribute('data-tab');
+                
+                // Deactivate all tabs and tab contents
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                
+                // Activate selected tab and content
+                this.classList.add('active');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        // Processing functionality
+        document.getElementById('normalize-text-btn').addEventListener('click', async function() {
+            const text = document.getElementById('text-to-normalize').value.trim();
+            if (!text) {
+                alert('Пожалуйста, введите текст для нормализации');
+                return;
+            }
+            
+            const loadingIndicator = document.getElementById('normalize-loading');
+            loadingIndicator.style.display = 'inline';
+            
+            try {
+                const response = await fetch('/processing/normalize_text', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(text)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                const resultDiv = document.getElementById('normalization-result');
+                resultDiv.textContent = JSON.stringify(result, null, 2);
+                resultDiv.style.display = 'block';
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка нормализации текста: ' + error.message);
+            } finally {
+                loadingIndicator.style.display = 'none';
+            }
+        });
+
+        document.getElementById('process-xlsx-btn').addEventListener('click', function() {
+            const fileInput = document.getElementById('xlsx-file');
+            if (!fileInput.files.length) {
+                alert('Пожалуйста, выберите XLSX файл');
+                return;
+            }
+            
+            const loadingIndicator = document.getElementById('process-xlsx-loading');
+            loadingIndicator.style.display = 'inline';
+            
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Create download link
+            fetch('/processing/normalize_xlsx', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'normalized_data.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                alert('Обработка завершена! Скачивание началось.');
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка обработки XLSX: ' + error.message);
+            })
+            .finally(() => {
+                loadingIndicator.style.display = 'none';
+            });
+        });
+
+        // Examples functionality
+        function loadExamples() {
+            fetch('/examples/')
+                .then(response => response.json())
+                .then(examples => {
+                    const tbody = document.getElementById('examples-tbody');
+                    tbody.innerHTML = '';
+                    
+                    examples.forEach(example => {
+                        const tr = document.createElement('tr');
+                        
+                        const idTd = document.createElement('td');
+                        idTd.textContent = example.id;
+                        tr.appendChild(idTd);
+                        
+                        const typeTd = document.createElement('td');
+                        typeTd.textContent = example.type;
+                        tr.appendChild(typeTd);
+                        
+                        const unnormalizedTd = document.createElement('td');
+                        unnormalizedTd.textContent = example.unnormalized_text;
+                        tr.appendChild(unnormalizedTd);
+                        
+                        const normalizedTd = document.createElement('td');
+                        normalizedTd.textContent = JSON.stringify(example.normalized_json);
+                        tr.appendChild(normalizedTd);
+                        
+                        const actionsTd = document.createElement('td');
+                        
+                        const editBtn = document.createElement('button');
+                        editBtn.textContent = 'Изменить';
+                        editBtn.addEventListener('click', () => editExample(example));
+                        actionsTd.appendChild(editBtn);
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.textContent = 'Удалить';
+                        deleteBtn.classList.add('delete');
+                        deleteBtn.addEventListener('click', () => deleteExample(example.id));
+                        actionsTd.appendChild(deleteBtn);
+                        
+                        tr.appendChild(actionsTd);
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(error => {
+                    console.error('Ошибка загрузки примеров:', error);
+                    alert('Ошибка загрузки примеров: ' + error.message);
+                });
+        }
+
+        function editExample(example) {
+            document.getElementById('example-form-title').textContent = 'Изменить пример';
+            document.getElementById('example-id').value = example.id;
+            document.getElementById('example-type').value = example.type;
+            document.getElementById('example-unnormalized').value = example.unnormalized_text;
+            document.getElementById('example-normalized').value = JSON.stringify(example.normalized_json, null, 2);
+            document.getElementById('example-form').style.display = 'block';
+        }
+
+        function deleteExample(id) {
+            if (confirm('Вы уверены, что хотите удалить этот пример?')) {
+                fetch(`/examples/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(response => {
+                    if (!response.ok && response.status !== 204) {
+                        throw new Error(`Ошибка: ${response.status}`);
+                    }
+                    loadExamples();
+                })
+                .catch(error => {
+                    console.error('Ошибка удаления примера:', error);
+                    alert('Ошибка удаления примера: ' + error.message);
+                });
+            }
+        }
+
+        document.getElementById('refresh-examples-btn').addEventListener('click', loadExamples);
+        
+        document.getElementById('add-example-btn').addEventListener('click', function() {
+            document.getElementById('example-form-title').textContent = 'Добавить новый пример';
+            document.getElementById('example-id').value = '';
+            document.getElementById('example-type').value = '';
+            document.getElementById('example-unnormalized').value = '';
+            document.getElementById('example-normalized').value = '';
+            document.getElementById('example-form').style.display = 'block';
+        });
+
+        document.getElementById('cancel-example-btn').addEventListener('click', function() {
+            document.getElementById('example-form').style.display = 'none';
+        });
+
+        document.getElementById('save-example-btn').addEventListener('click', function() {
+            const id = document.getElementById('example-id').value;
+            
+            try {
+                const example = {
+                    type: document.getElementById('example-type').value,
+                    unnormalized_text: document.getElementById('example-unnormalized').value,
+                    normalized_json: JSON.parse(document.getElementById('example-normalized').value)
+                };
+                
+                const url = id ? `/examples/${id}` : '/examples/';
+                const method = id ? 'PUT' : 'POST';
+                
+                fetch(url, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(example)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Ошибка: ${response.status}`);
+                    }
+                    document.getElementById('example-form').style.display = 'none';
+                    loadExamples();
+                })
+                .catch(error => {
+                    console.error('Ошибка сохранения примера:', error);
+                    alert('Ошибка сохранения примера: ' + error.message);
+                });
+            } catch (error) {
+                alert('Неверный формат JSON для нормализованных данных');
+            }
+        });
+
+        document.getElementById('upload-examples-xlsx-btn').addEventListener('click', function() {
+            document.getElementById('examples-xlsx-file').click();
+        });
+
+        document.getElementById('examples-xlsx-file').addEventListener('change', function() {
+            if (!this.files.length) return;
+            
+            const file = this.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/examples/upload_from_xlsx', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Примеры успешно загружены!');
+                loadExamples();
+                this.value = '';
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки примеров:', error);
+                alert('Ошибка загрузки примеров: ' + error.message);
+            });
+        });
+
+        // Schemas functionality
+        function loadSchemas() {
+            fetch('/schemas/')
+                .then(response => response.json())
+                .then(schemas => {
+                    const tbody = document.getElementById('schemas-tbody');
+                    tbody.innerHTML = '';
+                    
+                    schemas.forEach(schema => {
+                        const tr = document.createElement('tr');
+                        
+                        const idTd = document.createElement('td');
+                        idTd.textContent = schema.id;
+                        tr.appendChild(idTd);
+                        
+                        const typeTd = document.createElement('td');
+                        typeTd.textContent = schema.type;
+                        tr.appendChild(typeTd);
+                        
+                        const attributesTd = document.createElement('td');
+                        attributesTd.textContent = schema.attributes.join(', ');
+                        tr.appendChild(attributesTd);
+                        
+                        const actionsTd = document.createElement('td');
+                        
+                        const editBtn = document.createElement('button');
+                        editBtn.textContent = 'Изменить';
+                        editBtn.addEventListener('click', () => editSchema(schema));
+                        actionsTd.appendChild(editBtn);
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.textContent = 'Удалить';
+                        deleteBtn.classList.add('delete');
+                        deleteBtn.addEventListener('click', () => deleteSchema(schema.id));
+                        actionsTd.appendChild(deleteBtn);
+                        
+                        tr.appendChild(actionsTd);
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(error => {
+                    console.error('Ошибка загрузки схем:', error);
+                    alert('Ошибка загрузки схем: ' + error.message);
+                });
+        }
+
+        function editSchema(schema) {
+            document.getElementById('schema-form-title').textContent = 'Изменить схему';
+            document.getElementById('schema-id').value = schema.id;
+            document.getElementById('schema-type').value = schema.type;
+            document.getElementById('schema-attributes').value = schema.attributes.join(', ');
+            document.getElementById('schema-form').style.display = 'block';
+        }
+
+        function deleteSchema(id) {
+            if (confirm('Вы уверены, что хотите удалить эту схему?')) {
+                fetch(`/schemas/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(response => {
+                    if (!response.ok && response.status !== 204) {
+                        throw new Error(`Ошибка: ${response.status}`);
+                    }
+                    loadSchemas();
+                })
+                .catch(error => {
+                    console.error('Ошибка удаления схемы:', error);
+                    alert('Ошибка удаления схемы: ' + error.message);
+                });
+            }
+        }
+
+        document.getElementById('refresh-schemas-btn').addEventListener('click', loadSchemas);
+        
+        document.getElementById('add-schema-btn').addEventListener('click', function() {
+            document.getElementById('schema-form-title').textContent = 'Добавить новую схему';
+            document.getElementById('schema-id').value = '';
+            document.getElementById('schema-type').value = '';
+            document.getElementById('schema-attributes').value = '';
+            document.getElementById('schema-form').style.display = 'block';
+        });
+
+        document.getElementById('cancel-schema-btn').addEventListener('click', function() {
+            document.getElementById('schema-form').style.display = 'none';
+        });
+
+        document.getElementById('save-schema-btn').addEventListener('click', function() {
+            const id = document.getElementById('schema-id').value;
+            const type = document.getElementById('schema-type').value;
+            const attributesStr = document.getElementById('schema-attributes').value;
+            
+            // Convert comma-separated attributes to array
+            const attributes = attributesStr.split(',').map(attr => attr.trim()).filter(attr => attr);
+            
+            if (!type || !attributes.length) {
+                alert('Тип и атрибуты обязательны');
+                return;
+            }
+            
+            const schema = {
+                type,
+                attributes
+            };
+            
+            const url = id ? `/schemas/${id}` : '/schemas/';
+            const method = id ? 'PUT' : 'POST';
+            
+            fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(schema)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                document.getElementById('schema-form').style.display = 'none';
+                loadSchemas();
+            })
+            .catch(error => {
+                console.error('Ошибка сохранения схемы:', error);
+                alert('Ошибка сохранения схемы: ' + error.message);
+            });
+        });
+
+        document.getElementById('upload-schemas-xlsx-btn').addEventListener('click', function() {
+            document.getElementById('schemas-xlsx-file').click();
+        });
+
+        document.getElementById('schemas-xlsx-file').addEventListener('change', function() {
+            if (!this.files.length) return;
+            
+            const file = this.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/schemas/upload_from_xlsx', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Схемы успешно загружены!');
+                loadSchemas();
+                this.value = '';
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки схем:', error);
+                alert('Ошибка загрузки схем: ' + error.message);
+            });
+        });
+
+        // Initialize the page
+        window.addEventListener('DOMContentLoaded', () => {
+            loadExamples();
+            loadSchemas();
+        });
+    </script>
+</body>
+</html> 
