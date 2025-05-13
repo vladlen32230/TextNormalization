@@ -168,7 +168,7 @@ async def upload_from_xlsx(file: UploadFile = File(...)):
     # Save the uploaded file temporarily
     contents = await file.read()
     
-    df = pd.read_excel(BytesIO(contents))
+    df = pd.read_excel(BytesIO(contents), header=None)
     
     # Get JSON objects from the first column
     rows = df.iloc[:, 0].to_list()

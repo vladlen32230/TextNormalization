@@ -31,7 +31,10 @@ async def normalize_xlsx_endpoint(file: UploadFile = File(...)):
     df = pd.read_excel(io.BytesIO(contents), header=None)
     
     # Extract first column texts
-    first_column = df.iloc[:, 0].astype(str).tolist()
+    first_column_series = df.iloc[:, 0]
+    # Filter out NaN values and empty strings
+    first_column_series = first_column_series.dropna()
+    first_column = [str(text).strip() for text in first_column_series.tolist() if str(text).strip()]
     
     # Determine types in parallel
     type_tasks = [determine_type(text) for text in first_column]
@@ -95,12 +98,25 @@ async def normalize_xlsx_endpoint(file: UploadFile = File(...)):
                     keys.update(item.keys())
                 
                 # Create DataFrame with all keys as columns
+                keys = sorted(list(keys)) # Sort keys for consistent column order
+                
                 rows = []
-                for _, item in sorted_data:
+                for idx, item in sorted_data:
+                    # Get the original text using the stored index
+                    original_text = first_column[idx]
+                    
+                    # Create row dictionary including normalized data, empty column, and original text
                     row = {key: item.get(key, "") for key in keys}
+                    # Add an empty column (using an empty string as key, pandas will handle it)
+                    row[""] = "" 
+                    # Add the original text column
+                    row["Оригинал"] = original_text
                     rows.append(row)
                 
-                sheet_df = pd.DataFrame(rows)
+                # Define column order: normalized keys, empty column, original column
+                column_order = keys + ["", "Оригинал"]
+                
+                sheet_df = pd.DataFrame(rows, columns=column_order)
                 sheet_df.to_excel(writer, sheet_name=type_name, index=False)
                 
                 # Auto-adjust column widths to fit content

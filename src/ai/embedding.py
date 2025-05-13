@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 client = AsyncOpenAI(
-    base_url=os.getenv("LLM_BASE_URL", "http://localhost:11434/v1"), 
-    api_key=os.getenv("API_KEY", "OLLAMA")
+    base_url=os.getenv("EMBED_BASE_URL", "http://localhost:11434/v1"), 
+    api_key=os.getenv("EMBED_API_KEY", "OLLAMA")
 )
 
 async def embed_text(text: list[str]) -> list[list[float]]:
