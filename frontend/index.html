@@ -138,6 +138,39 @@
             width: 15%;
         }
         
+        /* Validation styles */
+        #validation-table th:nth-child(1), #validation-table td:nth-child(1) { /* Text */
+            width: 20%;
+        }
+        #validation-table th:nth-child(2), #validation-table td:nth-child(2) { /* Type */
+            width: 10%;
+        }
+        #validation-table th:nth-child(3), #validation-table td:nth-child(3) { /* Result */
+            width: 15%;
+        }
+        #validation-table th:nth-child(4), #validation-table td:nth-child(4), /* Expected JSON */
+        #validation-table th:nth-child(5), #validation-table td:nth-child(5) { /* Actual JSON */
+            width: 20%;
+        }
+        #validation-table th:nth-child(6), #validation-table td:nth-child(6) { /* Mismatch details */
+            width: 20%;
+        }
+        
+        .summary-box {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .help-text {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+        
         /* Column widths for the schemas table */
         #schemas-table th:nth-child(1), #schemas-table td:nth-child(1) { /* ID column */
             width: 5%;
@@ -161,6 +194,7 @@
             <div class="tab active" data-tab="processing">Обработка</div>
             <div class="tab" data-tab="examples">Примеры</div>
             <div class="tab" data-tab="schemas">Схемы</div>
+            <div class="tab" data-tab="validation">Валидация</div>
         </div>
         
         <!-- Processing Tab -->
@@ -266,6 +300,40 @@
                 </thead>
                 <tbody id="schemas-tbody"></tbody>
             </table>
+        </div>
+
+        <!-- Validation Tab -->
+        <div id="validation" class="tab-content">
+            <h2>Валидация нормализации</h2>
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="validation-xlsx-file">Загрузите XLSX файл для валидации нормализации:</label>
+                    <p class="help-text">Файл должен содержать 2 колонки без заголовков: 1-я колонка - ненормализованный текст, 2-я колонка - ожидаемый JSON результат нормализации.</p>
+                    <input type="file" id="validation-xlsx-file" class="file-input" accept=".xlsx">
+                </div>
+                <button id="validate-xlsx-btn">Проверить нормализацию</button>
+                <span id="validation-loading" class="loading">Обработка</span>
+            </div>
+            
+            <div id="validation-results" class="results" style="display: none;">
+                <h3>Результаты валидации</h3>
+                <div id="validation-summary"></div>
+                
+                <h4>Детальные результаты</h4>
+                <table id="validation-table">
+                    <thead>
+                        <tr>
+                            <th>Текст</th>
+                            <th>Тип</th>
+                            <th>Результат</th>
+                            <th>Ожидаемый JSON</th>
+                            <th>Фактический JSON</th>
+                            <th>Детали несоответствия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="validation-tbody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -684,6 +752,128 @@
                 alert('Ошибка загрузки схем: ' + error.message);
             });
         });
+
+        // Validation functionality
+        document.getElementById('validate-xlsx-btn').addEventListener('click', function() {
+            const fileInput = document.getElementById('validation-xlsx-file');
+            if (!fileInput.files.length) {
+                alert('Пожалуйста, выберите XLSX файл');
+                return;
+            }
+            
+            const loadingIndicator = document.getElementById('validation-loading');
+            loadingIndicator.style.display = 'inline';
+            
+            const resultsDiv = document.getElementById('validation-results');
+            resultsDiv.style.display = 'none';
+            
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/processing/validate_normalization', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Display validation results
+                displayValidationResults(data);
+                resultsDiv.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Ошибка валидации:', error);
+                alert('Ошибка валидации: ' + error.message);
+            })
+            .finally(() => {
+                loadingIndicator.style.display = 'none';
+            });
+        });
+        
+        function displayValidationResults(data) {
+            // Display summary
+            const summaryDiv = document.getElementById('validation-summary');
+            const summary = data.summary;
+            
+            summaryDiv.innerHTML = `
+                <div class="summary-box">
+                    <h4>Статистика по записям:</h4>
+                    <p><strong>Всего проверено:</strong> ${summary.total}</p>
+                    <p><strong>Совпадений:</strong> ${summary.matched} (${Math.round(summary.matched / summary.total * 100)}%)</p>
+                    <p><strong>Несовпадений:</strong> ${summary.mismatched} (${Math.round(summary.mismatched / summary.total * 100)}%)</p>
+                    
+                    <h4>Статистика по парам ключ-значение:</h4>
+                    <p><strong>Всего пар:</strong> ${summary.total_pairs}</p>
+                    <p><strong>Правильных пар:</strong> ${summary.correct_pairs} (${Math.round(summary.correct_pairs / summary.total_pairs * 100)}%)</p>
+                    <p><strong>Неправильных пар:</strong> ${summary.incorrect_pairs} (${Math.round(summary.incorrect_pairs / summary.total_pairs * 100)}%)</p>
+                </div>
+            `;
+            
+            // Display detailed results
+            const tbody = document.getElementById('validation-tbody');
+            tbody.innerHTML = '';
+            
+            data.results.forEach(result => {
+                const tr = document.createElement('tr');
+                
+                // Text column
+                const textTd = document.createElement('td');
+                textTd.textContent = result.unnormalized_text;
+                tr.appendChild(textTd);
+                
+                // Type column
+                const typeTd = document.createElement('td');
+                typeTd.textContent = result.type || 'неизвестно';
+                tr.appendChild(typeTd);
+                
+                // Result column
+                const resultTd = document.createElement('td');
+                if (result.matched) {
+                    resultTd.innerHTML = `<span style="color: green">✓ Совпадение</span><br>`;
+                } else {
+                    resultTd.innerHTML = `<span style="color: red">✗ Несовпадение</span><br>`;
+                }
+                
+                // Add key-value pair stats
+                if (result.total_pairs) {
+                    const correctPercent = Math.round((result.correct_pairs / result.total_pairs) * 100);
+                    resultTd.innerHTML += `<small>Пары: ${result.correct_pairs}/${result.total_pairs} (${correctPercent}%)</small>`;
+                }
+                
+                tr.appendChild(resultTd);
+                
+                // Expected JSON column
+                const expectedTd = document.createElement('td');
+                expectedTd.textContent = JSON.stringify(result.expected_json, null, 2);
+                tr.appendChild(expectedTd);
+                
+                // Actual JSON column
+                const actualTd = document.createElement('td');
+                actualTd.textContent = result.actual_json ? JSON.stringify(result.actual_json, null, 2) : 'Ошибка';
+                tr.appendChild(actualTd);
+                
+                // Mismatch details column
+                const mismatchTd = document.createElement('td');
+                if (result.error) {
+                    mismatchTd.textContent = result.error;
+                } else if (!result.matched && result.mismatch_details) {
+                    let mismatchText = '';
+                    for (const key in result.mismatch_details) {
+                        const detail = result.mismatch_details[key];
+                        mismatchText += `Ключ: ${key}\nОжидалось: ${detail.expected}\nПолучено: ${detail.actual}\n\n`;
+                    }
+                    mismatchTd.textContent = mismatchText;
+                }
+                tr.appendChild(mismatchTd);
+                
+                tbody.appendChild(tr);
+            });
+        }
 
         // Initialize the page
         window.addEventListener('DOMContentLoaded', () => {

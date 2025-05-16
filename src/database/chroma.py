@@ -49,13 +49,20 @@ async def get_examples(unnormalized_text: str, type: str) -> tuple[list[str], li
 
     text_embeddings = await embed_text([unnormalized_text])
 
+    # Get count of examples for this type
+    count = examples_collection.count()
+    
+    # If no examples exist, return empty lists
+    if count == 0:
+        return [], []
+
     results = examples_collection.query(
         query_embeddings=text_embeddings,
         where={"type": type},
         n_results=examples_collection.count(),
     )
 
-    unnormalized_texts = results["documents"][0][:3]
+    unnormalized_texts = results["documents"][0][:5]
     normalized_jsons = [json.loads(result["normalized_json"]) for result in results["metadatas"][0][:3]]
 
     return unnormalized_texts, normalized_jsons

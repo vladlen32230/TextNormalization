@@ -4,6 +4,7 @@ from src.ai.llm import determine_type, normalize_text
 from src.database.sqlite import Schema, get_session
 import pandas as pd
 import io
+import json
 import asyncio
 from collections import defaultdict
 from openpyxl.utils import get_column_letter
@@ -140,3 +141,205 @@ async def normalize_xlsx_endpoint(file: UploadFile = File(...)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=normalized_data.xlsx"}
     )
+
+@router.post("/validate_normalization", response_model=dict)
+async def validate_normalization(file: UploadFile = File(...)):
+    """
+    Endpoint that receives an XLSX file with unnormalized text in column 1 and JSON normalized version in column 2.
+    It normalizes the text using existing methods and checks if the result matches the provided JSON.
+    
+    Returns a dictionary with validation results.
+    """
+    # Read the XLSX file
+    contents = await file.read()
+    df = pd.read_excel(io.BytesIO(contents), header=None)
+    
+    # Ensure the file has at least 2 columns
+    if df.shape[1] < 2:
+        return {"error": "The file must have at least 2 columns: unnormalized text and JSON normalized version"}
+    
+    # Extract valid rows and prepare data for processing
+    valid_rows = []
+    for index, row in df.iterrows():
+        print(row)
+        if pd.isna(row[0]) or pd.isna(row[1]):
+            continue
+            
+        unnormalized_text = str(row[0]).strip()
+        expected_json_str = str(row[1]).strip()
+        
+        # Skip empty rows
+        if not unnormalized_text or not expected_json_str:
+            continue
+        
+        try:
+            # Load and normalize the expected JSON (strip and lowercase keys)
+            raw_expected_json = json.loads(expected_json_str)
+            expected_json = {}
+            for key, value in raw_expected_json.items():
+                # Strip and lowercase keys for consistent comparison
+                expected_json[key.strip().lower()] = value
+                
+            valid_rows.append({
+                "index": index,
+                "unnormalized_text": unnormalized_text,
+                "expected_json_str": expected_json_str,
+                "raw_expected_json": raw_expected_json,
+                "expected_json": expected_json
+            })
+        except json.JSONDecodeError:
+            # Skip rows with invalid JSON
+            pass
+    
+    # Initialize validation summary
+    validation_summary = {
+        "total": len(valid_rows),     # Total number of rows processed
+        "matched": 0,                 # Number of rows with perfect matches
+        "mismatched": 0,             # Number of rows with at least one mismatch
+        "total_pairs": 0,            # Total number of key-value pairs checked
+        "correct_pairs": 0,          # Number of correctly matched key-value pairs
+        "incorrect_pairs": 0         # Number of incorrectly matched key-value pairs
+    }
+    
+    # No valid rows to process
+    if not valid_rows:
+        return {
+            "summary": validation_summary,
+            "results": []
+        }
+    
+    # Step 1: Determine types for all texts in parallel
+    unnormalized_texts = [row["unnormalized_text"] for row in valid_rows]
+    type_tasks = [determine_type(text) for text in unnormalized_texts]
+    text_types = await asyncio.gather(*type_tasks)
+    
+    # Step 2: Get schemas for all determined types
+    type_to_attributes = {}
+    with get_session() as session:
+        for text_type in set(text_types):
+            if text_type.lower().strip() != "неизвестно":
+                schema = session.query(Schema).filter(Schema.type == text_type).first()
+                if schema:
+                    type_to_attributes[text_type] = schema.attributes
+    
+    # Step 3: Create normalization tasks for texts with valid schemas
+    normalization_tasks = []
+    task_indices = []
+    
+    for i, (row, text_type) in enumerate(zip(valid_rows, text_types)):
+        attributes = type_to_attributes.get(text_type, [])
+        if text_type.lower().strip() != "неизвестно" and attributes:
+            task = normalize_text(row["unnormalized_text"], text_type, attributes)
+            normalization_tasks.append(task)
+            task_indices.append(i)
+    
+    # Step 4: Execute all normalization tasks in parallel
+    normalization_results = await asyncio.gather(*normalization_tasks) if normalization_tasks else []
+    
+    # Step 5: Process results and build response
+    results = []
+    
+    for i, (row, text_type) in enumerate(zip(valid_rows, text_types)):
+        unnormalized_text = row["unnormalized_text"]
+        raw_expected_json = row["raw_expected_json"]
+        expected_json = row["expected_json"]
+        
+        # Check if this row had a normalization task
+        if i in task_indices:
+            task_idx = task_indices.index(i)
+            raw_actual_json = normalization_results[task_idx]
+            
+            # Normalize the actual JSON (strip and lowercase keys)
+            actual_json = {}
+            for key, value in raw_actual_json.items():
+                # Strip and lowercase keys for consistent comparison
+                actual_json[key.strip().lower()] = value
+            
+            # Compare the normalized result with the expected JSON
+            is_match = True
+            mismatch_details = {}
+            
+            # Count key-value pairs for statistics
+            total_pairs = len(expected_json)
+            correct_pairs = 0
+            incorrect_pairs = 0
+            
+            for key, expected_value in expected_json.items():
+                validation_summary["total_pairs"] += 1
+                
+                # For string values, also compare them case-insensitively
+                if key not in actual_json:
+                    is_match = False
+                    incorrect_pairs += 1
+                    mismatch_details[key] = {
+                        "expected": expected_value,
+                        "actual": "missing"
+                    }
+                elif isinstance(expected_value, str) and isinstance(actual_json[key], str):
+                    # For string values, compare them case-insensitively
+                    if actual_json[key].strip().lower() != expected_value.strip().lower():
+                        is_match = False
+                        incorrect_pairs += 1
+                        mismatch_details[key] = {
+                            "expected": expected_value,
+                            "actual": actual_json[key]
+                        }
+                    else:
+                        correct_pairs += 1
+                elif actual_json[key] != expected_value:
+                    is_match = False
+                    incorrect_pairs += 1
+                    mismatch_details[key] = {
+                        "expected": expected_value,
+                        "actual": actual_json[key]
+                    }
+                else:
+                    correct_pairs += 1
+            
+            # Update validation counters
+            if is_match:
+                validation_summary["matched"] += 1
+            else:
+                validation_summary["mismatched"] += 1
+                
+            # Add pair statistics
+            validation_summary["correct_pairs"] += correct_pairs
+            validation_summary["incorrect_pairs"] += incorrect_pairs
+            
+            # Add result to the list
+            results.append({
+                "unnormalized_text": unnormalized_text,
+                "expected_json": raw_expected_json,  # Return the original format for display
+                "actual_json": raw_actual_json,      # Return the original format for display
+                "matched": is_match,
+                "total_pairs": total_pairs,
+                "correct_pairs": correct_pairs,
+                "incorrect_pairs": incorrect_pairs,
+                "mismatch_details": mismatch_details if not is_match else {},
+                "type": text_type
+            })
+        else:
+            # Type is unknown or no schema found, mark as mismatched
+            validation_summary["mismatched"] += 1
+            results.append({
+                "unnormalized_text": unnormalized_text,
+                "expected_json": raw_expected_json,
+                "actual_json": {"тип": "неизвестно"},
+                "matched": False,
+                "total_pairs": 0,
+                "correct_pairs": 0,
+                "incorrect_pairs": 0,
+                "type": text_type
+            })
+    
+    # Create output with summary and detailed results
+    return {
+        "summary": validation_summary,
+        "results": results
+    }
+
+    # Create output with summary and detailed results
+    return {
+        "summary": validation_summary,
+        "results": results
+    }
