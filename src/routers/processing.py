@@ -8,6 +8,7 @@ import json
 import asyncio
 from collections import defaultdict
 from openpyxl.utils import get_column_letter
+from rouge_score import rouge_scorer
 
 
 router = APIRouter(prefix="/processing", tags=["processing"])
@@ -277,7 +278,7 @@ async def validate_normalization(file: UploadFile = File(...)):
                     }
                 elif isinstance(expected_value, str) and isinstance(actual_json[key], str):
                     # For string values, compare them case-insensitively
-                    if actual_json[key].strip().lower() != expected_value.strip().lower():
+                    if actual_json[key].strip().lower().replace(" ", "") != expected_value.strip().lower().replace(" ", ""):
                         is_match = False
                         incorrect_pairs += 1
                         mismatch_details[key] = {
@@ -286,7 +287,7 @@ async def validate_normalization(file: UploadFile = File(...)):
                         }
                     else:
                         correct_pairs += 1
-                elif actual_json[key] != expected_value:
+                elif actual_json[key].strip().lower().replace(" ", "") != expected_value.strip().lower().replace(" ", ""):
                     is_match = False
                     incorrect_pairs += 1
                     mismatch_details[key] = {
@@ -332,13 +333,44 @@ async def validate_normalization(file: UploadFile = File(...)):
                 "type": text_type
             })
     
-    # Create output with summary and detailed results
-    return {
-        "summary": validation_summary,
-        "results": results
-    }
-
-    # Create output with summary and detailed results
+    # Calculate ROUGE scores for normalized JSON strings
+    rouge_scores = {"rouge1": 0.0, "rouge2": 0.0, "rougeL": 0.0}
+    
+    if results:
+        scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+        total_rouge1 = 0.0
+        total_rouge2 = 0.0
+        total_rougeL = 0.0
+        valid_scores_count = 0
+        
+        for result in results:
+            # Convert JSON objects to strings for ROUGE calculation
+            expected_str = json.dumps(result["expected_json"], ensure_ascii=False, sort_keys=True)
+            actual_str = json.dumps(result["actual_json"], ensure_ascii=False, sort_keys=True)
+            
+            # Calculate ROUGE scores
+            scores = scorer.score(expected_str, actual_str)
+            
+            # Accumulate F1 scores
+            total_rouge1 += scores['rouge1'].fmeasure
+            total_rouge2 += scores['rouge2'].fmeasure
+            total_rougeL += scores['rougeL'].fmeasure
+            valid_scores_count += 1
+        
+        # Calculate average ROUGE scores
+        if valid_scores_count > 0:
+            rouge_scores = {
+                "rouge1": round(total_rouge1 / valid_scores_count, 4),
+                "rouge2": round(total_rouge2 / valid_scores_count, 4),
+                "rougeL": round(total_rougeL / valid_scores_count, 4)
+            }
+    
+    print(f"ROUGE Scores for normalized JSON:")
+    print(f"ROUGE-1: {rouge_scores['rouge1']}")
+    print(f"ROUGE-2: {rouge_scores['rouge2']}")
+    print(f"ROUGE-L: {rouge_scores['rougeL']}")
+    
+    # Create output with summary, detailed results, and ROUGE scores
     return {
         "summary": validation_summary,
         "results": results

@@ -178,7 +178,9 @@ async def upload_from_xlsx(file: UploadFile = File(...)):
     
     # Process each row in the dataframe
     with get_session() as session:
-        for row in rows:
+        for i, row in enumerate(rows):  # Added enumerate to get index
+            print(f"Processing row {i}: {row}")  # Added print statement
+            
             # Parse JSON string to dict
             json_data = json.loads(row)
             json_data = {k.lower().strip(): v.lower().strip() for k, v in json_data.items()}
