@@ -9,6 +9,13 @@
 uv run main.py
 ```
 
+По умолчанию используется Ollama в качестве сервера.
+```bash
+ollama serve
+ollama pull paraphrase-multilingual:latest
+ollama pull qwen3:30b-a3b-q4_K_M
+```
+
 Конфигурация меняется в .env файле
 
 Схемы и примеры могут быть загружены из xlsx файла:
