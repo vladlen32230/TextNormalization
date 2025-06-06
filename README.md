@@ -6,19 +6,19 @@
 
 Установка uv:
 
-windows:
+WINDOWS:
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
-ИЛИ
+или
 ```bash
 pip install uv
 ```
-linux:
+LINUX:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-ИЛИ
+или
 ```bash
 pip install uv
 ```
