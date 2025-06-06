@@ -5,6 +5,7 @@
 Пример - Должен иметь тип, ненормализованный текст и нормализованный атрибут
 
 Установка uv:
+
 windows:
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
