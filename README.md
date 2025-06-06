@@ -10,11 +10,15 @@ windows:
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
+ИЛИ
+```bash
+pip install uv
+```
 linux:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-any:
+ИЛИ
 ```bash
 pip install uv
 ```
