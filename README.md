@@ -4,6 +4,20 @@
 
 Пример - Должен иметь тип, ненормализованный текст и нормализованный атрибут
 
+Установка uv:
+windows:
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+linux:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+any:
+```bash
+pip install uv
+```
+
 Запуск приложения: 
 ```bash
 uv run main.py
