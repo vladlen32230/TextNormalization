@@ -63,6 +63,7 @@ async def get_examples(unnormalized_text: str, type: str) -> tuple[list[str], li
     )
 
     unnormalized_texts = results["documents"][0][:5]
+    unnormalized_texts = [text.replace('неизвестно', '').strip() for text in unnormalized_texts]
     normalized_jsons = [json.loads(result["normalized_json"]) for result in results["metadatas"][0][:3]]
 
     return unnormalized_texts, normalized_jsons
