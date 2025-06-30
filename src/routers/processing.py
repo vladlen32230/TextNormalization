@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body, UploadFile, File
 from fastapi.responses import StreamingResponse
 from src.ai.llm import determine_type, normalize_text
 from src.database.sqlite import Schema, get_session
+from src.utils.text_processing import normalize_quotes_for_json
 import pandas as pd
 import io
 import json
@@ -174,8 +175,11 @@ async def validate_normalization(file: UploadFile = File(...)):
             continue
         
         try:
+            # Replace curly quotes with straight quotes for JSON parsing
+            expected_json_str_normalized = normalize_quotes_for_json(expected_json_str)
+            
             # Load and normalize the expected JSON (strip and lowercase keys)
-            raw_expected_json = json.loads(expected_json_str)
+            raw_expected_json = json.loads(expected_json_str_normalized)
             expected_json = {}
             for key, value in raw_expected_json.items():
                 # Strip and lowercase keys for consistent comparison
@@ -184,7 +188,7 @@ async def validate_normalization(file: UploadFile = File(...)):
             valid_rows.append({
                 "index": index,
                 "unnormalized_text": unnormalized_text,
-                "expected_json_str": expected_json_str,
+                "expected_json_str": expected_json_str,  # Store original for display
                 "raw_expected_json": raw_expected_json,
                 "expected_json": expected_json
             })
@@ -310,8 +314,8 @@ async def validate_normalization(file: UploadFile = File(...)):
             # Add result to the list
             results.append({
                 "unnormalized_text": unnormalized_text,
-                "expected_json": raw_expected_json,  # Return the original format for display
-                "actual_json": raw_actual_json,      # Return the original format for display
+                "expected_json": row["expected_json_str"],  # This now has curly quotes
+                "actual_json": raw_actual_json,
                 "matched": is_match,
                 "total_pairs": total_pairs,
                 "correct_pairs": correct_pairs,
@@ -324,7 +328,7 @@ async def validate_normalization(file: UploadFile = File(...)):
             validation_summary["mismatched"] += 1
             results.append({
                 "unnormalized_text": unnormalized_text,
-                "expected_json": raw_expected_json,
+                "expected_json": row["expected_json_str"],  # This now has curly quotes
                 "actual_json": {"тип": "неизвестно"},
                 "matched": False,
                 "total_pairs": 0,

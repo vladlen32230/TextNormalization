@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from io import BytesIO
 from src.database.sqlite import Example, get_session
 from src.database.chroma import add_example_chroma, delete_example_chroma
+from src.utils.text_processing import normalize_quotes_for_json
 
 router = APIRouter(prefix="/examples", tags=["examples"])
 
@@ -159,8 +160,11 @@ async def upload_from_xlsx(file: UploadFile = File(...)):
     # Process each row in the dataframe
     with get_session() as session:
         for row in rows:
+            # Replace curly quotes with straight quotes for JSON parsing
+            row_normalized = normalize_quotes_for_json(str(row))
+            
             # Parse JSON string to dict
-            json_data = json.loads(row)
+            json_data = json.loads(row_normalized)
             json_data = {k.lower().strip(): v.lower().strip() for k, v in json_data.items()}
             
             # Extract type from "Тип" field

@@ -3,6 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from src.database.sqlite import Schema, get_session
 from src.database.chroma import add_schema_chroma, delete_schema_chroma
+from src.utils.text_processing import normalize_quotes_for_json
 import pandas as pd
 import json
 import asyncio
@@ -181,8 +182,11 @@ async def upload_from_xlsx(file: UploadFile = File(...)):
         for i, row in enumerate(rows):  # Added enumerate to get index
             print(f"Processing row {i}: {row}")  # Added print statement
             
+            # Replace curly quotes with straight quotes for JSON parsing
+            row_normalized = normalize_quotes_for_json(str(row))
+            
             # Parse JSON string to dict
-            json_data = json.loads(row)
+            json_data = json.loads(row_normalized)
             json_data = {k.lower().strip(): v.lower().strip() for k, v in json_data.items()}
 
             # Extract type from "тип" field
