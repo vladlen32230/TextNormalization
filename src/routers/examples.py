@@ -84,12 +84,12 @@ async def read_example(example_id: int):
         )
 
 @router.get("/", response_model=List[ExampleResponse])
-async def read_examples(skip: int = 0, limit: int = 100, type: Optional[str] = None):
+async def read_examples(type: Optional[str] = None):
     with get_session() as session:
         query = session.query(Example)
         if type:
             query = query.filter(Example.type == type)
-        examples = query.offset(skip).limit(limit).all()
+        examples = query.all()
         
         # Create a copy of the data before closing the session
         return [
@@ -173,7 +173,7 @@ async def upload_from_xlsx(file: UploadFile = File(...)):
                 raise HTTPException(status_code=400, detail="Тип не найден")
             
             # Create unnormalized text by joining all values
-            unnormalized_text = " ".join(str(v) for v in json_data.values())
+            unnormalized_text = " ".join(str(v) for v in json_data.values() if v.lower().strip() != "неизвестно")
             
             # Create example in database
             db_example = Example(
